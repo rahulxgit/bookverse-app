@@ -1,3 +1,5 @@
+import type { FieldValue } from 'firebase/firestore';
+
 export type Book = {
   id: string;
   title: string;
@@ -29,17 +31,21 @@ export type CartItem = {
 };
 
 export type OrderItem = {
-  bookId: string;
-  quantity: number;
+  id: string;
+  title: string;
+  author: string;
   price: number;
+  imageUrl: string;
+  imageHint: string;
+  quantity: number;
 };
 
 export type Order = {
-  id:string;
+  id: string;
   userId: string;
   items: OrderItem[];
   totalPrice: number;
-  orderStatus: 'Pending' | 'Shipped' | 'Delivered';
+  status: 'Pending' | 'Shipped' | 'Delivered';
   paymentStatus: 'Paid' | 'Unpaid';
-  createdAt: string;
+  createdAt: FieldValue;
 };

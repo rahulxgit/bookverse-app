@@ -1,20 +1,22 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, writeBatch, doc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { Loader2, ShoppingCart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import type { CartItem } from '@/lib/types';
+import type { CartItem, Order } from '@/lib/types';
 import { CartItemCard } from '@/components/cart-item-card';
+import { useToast } from '@/hooks/use-toast';
 
 export default function CartPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+  const { toast } = useToast();
 
   const cartCollection = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -22,6 +24,62 @@ export default function CartPage() {
   }, [firestore, user]);
 
   const { data: cartItems, isLoading: isCartLoading } = useCollection<CartItem>(cartCollection);
+
+  const totalPrice = cartItems?.reduce((total, item) => total + item.price * item.quantity, 0) || 0;
+
+  const handleCheckout = async () => {
+    if (!user || !firestore || !cartItems || cartItems.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot proceed to checkout',
+        description: 'Your cart is empty or there was an issue.',
+      });
+      return;
+    }
+
+    const ordersCollectionRef = collection(firestore, 'users', user.uid, 'orders');
+    const newOrderRef = doc(ordersCollectionRef); // Create a reference with a new ID
+
+    const newOrder: Omit<Order, 'createdAt'> = {
+        id: newOrderRef.id,
+        userId: user.uid,
+        items: cartItems,
+        totalPrice: totalPrice,
+        status: 'Pending',
+        paymentStatus: 'Unpaid',
+    };
+    
+    const newOrderWithTimestamp = {
+        ...newOrder,
+        createdAt: serverTimestamp()
+    }
+
+    const batch = writeBatch(firestore);
+    
+    batch.set(newOrderRef, newOrderWithTimestamp);
+
+    cartItems.forEach(item => {
+        const cartItemRef = doc(firestore, 'users', user.uid, 'cart', item.id);
+        batch.delete(cartItemRef);
+    });
+
+    try {
+        await batch.commit();
+        toast({
+            title: 'Order Placed!',
+            description: 'Your order has been successfully placed.',
+        });
+        router.push(`/orders/${newOrderRef.id}`);
+    } catch (error: any) {
+        console.error('Checkout failed:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Uh oh! Something went wrong.',
+            description: error.message || 'Could not place your order.',
+        });
+    }
+  };
+
 
   if (isUserLoading) {
     return (
@@ -35,8 +93,6 @@ export default function CartPage() {
     router.push('/login');
     return null;
   }
-
-  const totalPrice = cartItems?.reduce((total, item) => total + item.price * item.quantity, 0) || 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -95,7 +151,7 @@ export default function CartPage() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button className="w-full" size="lg">Proceed to Checkout</Button>
+                <Button className="w-full" size="lg" onClick={handleCheckout}>Proceed to Checkout</Button>
               </CardFooter>
             </Card>
           </div>

@@ -67,12 +67,11 @@
         },
         "userId": {
           "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N Order)"
+          "description": "The ID of the user who placed the order."
         },
-        "orderDate": {
-          "type": "string",
-          "description": "The date the order was placed.",
-          "format": "date-time"
+        "createdAt": {
+          "type": "object",
+          "description": "The server timestamp when the order was created."
         },
         "status": {
           "type": "string",
@@ -82,21 +81,56 @@
           "type": "string",
           "description": "The payment status of the order."
         },
-        "bookIds": {
+        "items": {
           "type": "array",
-          "description": "References to Books. (Relationship: Order N:N Book)",
+          "description": "An array of items included in the order.",
           "items": {
-            "type": "string"
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "imageUrl": {
+                "type": "string"
+              },
+              "imageHint": {
+                "type": "string"
+              },
+              "quantity": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "price",
+              "quantity",
+              "imageUrl"
+            ]
           }
+        },
+        "totalPrice": {
+          "type": "number",
+          "description": "The total price of the order."
         }
       },
       "required": [
         "id",
         "userId",
-        "orderDate",
+        "createdAt",
         "status",
         "paymentStatus",
-        "bookIds"
+        "items",
+        "totalPrice"
       ]
     },
     "User": {
@@ -237,14 +271,18 @@
         }
       },
       {
-        "path": "/orders/{orderId}",
+        "path": "/users/{userId}/orders/{orderId}",
         "definition": {
           "entityName": "Order",
           "schema": {
             "$ref": "#/backend/entities/Order"
           },
-          "description": "Stores order information. Includes denormalized 'userId' for authorization independence.",
+          "description": "Stores order information for a specific user. Only the user can access their own orders.",
           "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            },
             {
               "name": "orderId",
               "description": "Unique identifier for the order."
@@ -269,6 +307,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore data structure is designed to support the BookVerse API's requirements for managing books, users, and orders while prioritizing security and scalability. It emphasizes authorization independence by avoiding hierarchical `get()` calls in security rules. This is achieved by denormalizing user roles and order ownership where necessary.\n\nThe structure is segregated to ensure that each collection has a homogeneous security posture.  Private user data is stored under the `/users/{userId}` path, enforcing path-based ownership for user-specific data. A user's shopping cart is a subcollection at `/users/{userId}/cart`. Book data is stored in a top-level `/books` collection, which is accessible to both customers (read) and admins (CRUD).  Orders are stored under `/orders/{orderId}` which includes the denormalized `userId` for enforcing ownership and access controls.  The admin role is managed via the `/roles_admin/{userId}` collection.\n\nThis design facilitates QAPs by:\n\n*   Segregating data based on access control needs, enabling secure `list` operations for books available to all users.\n*   Using the `/users/{userId}/cart` path for each user's cart, allowing secure listing of a user's own cart items.\n*   Employing existence-based checks for admin roles within the `/roles_admin` collection, allowing secure checks without needing to read document data.\n\nDenormalization Strategy: The primary denormalization involves including the `userId` in the `/orders` collection, which allows security rules to validate that the user placing the order is the owner without needing to perform a `get()` operation on the `/users/{userId}` document. This ensures authorization independence and supports atomic operations.\n"
+    "reasoning": "The Firestore data structure is designed to support the BookVerse API's requirements for managing books, users, and orders while prioritizing security and scalability. It emphasizes authorization independence by avoiding hierarchical `get()` calls in security rules. This is achieved by denormalizing user roles and order ownership where necessary.\n\nThe structure is segregated to ensure that each collection has a homogeneous security posture.  Private user data is stored under the `/users/{userId}` path, enforcing path-based ownership for user-specific data. A user's shopping cart and orders are subcollections at `/users/{userId}/cart` and `/users/{userId}/orders`. Book data is stored in a top-level `/books` collection, which is accessible to both customers (read) and admins (CRUD). The admin role is managed via the `/roles_admin/{userId}` collection.\n\nThis design facilitates QAPs by:\n\n*   Segregating data based on access control needs, enabling secure `list` operations for books available to all users.\n*   Using the `/users/{userId}/cart` and `/users/{userId}/orders` paths, allowing secure listing of a user's own private items.\n*   Employing existence-based checks for admin roles within the `/roles_admin` collection, allowing secure checks without needing to read document data.\n\nDenormalization Strategy: The primary denormalization involves copying book details into cart and order items. This ensures that order history remains accurate even if the original book details in the `/books` collection are changed or deleted."
   }
 }

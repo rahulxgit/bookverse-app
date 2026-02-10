@@ -23,8 +23,7 @@ rules_version = '2';
  * - `/users/{userId}`: A collection for user profiles. Access is strictly
  *   limited to the document owner.
  * - `/users/{userId}/cart/{bookId}`: A subcollection for a user's shopping cart items.
- * - `/orders/{orderId}`: A collection of all user orders. Access is granted
- *   based on a denormalized `userId` field within each order document.
+ * - `/users/{userId}/orders/{orderId}`: A subcollection for a user's orders.
  * - `/roles_admin/{userId}`: A special collection where the existence of a
  *   document signifies that the user is an administrator.
  *
@@ -38,16 +37,7 @@ rules_version = '2';
  *   read/write access to individual user profiles or orders, enforcing a strong
  *   privacy boundary.
  * - **Public Listing Disabled for Private Data**: Listing documents from top-level
- *   collections containing private data (`/users`, `/orders`) is disabled for
- *   non-admins to prevent data leakage. Securely listing a user's own orders
- *   would require restructuring them into a user-owned subcollection (e.g.,
- *   `/users/{userId}/orders/{orderId}`).
- *
- * @denormalization
- * - **Order Ownership**: Each document in the `/orders` collection contains a
- *   `userId` field. This denormalization is critical, allowing security rules
- *   to verify order ownership directly from the document without performing
- *   costly and slow `get()` calls to other collections.
+ *   collections containing private data (`/users`) is disabled to prevent data leakage.
  *
  */
 service cloud.firestore {
@@ -147,22 +137,16 @@ service cloud.firestore {
       match /cart/{bookId} {
         allow get, list, create, update, delete: if isOwner(userId);
       }
-    }
 
-    /**
-     * @description User order data. Access is restricted based on the `userId`
-     *              field within the order document itself.
-     * @path /orders/{orderId}
-     * @allow (create) A signed-in user creates an order for themselves, setting `userId` to their own UID.
-     * @deny (get) User 'A' tries to read an order document where `resource.data.userId` belongs to user 'B'.
-     * @principle Enforces document ownership for reads and writes using a denormalized ownership field.
-     */
-    match /orders/{orderId} {
-      allow get: if isOwner(resource.data.userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if (isOwner(resource.data.userId) && isExistingDoc() && request.resource.data.userId == resource.data.userId) || isExistingAdmin();
-      allow delete: if isOwner(resource.data.userId) && isExistingDoc();
+      /**
+       * @description A user's orders. Only the owner can manage their own orders.
+       * @path /users/{userId}/orders/{orderId}
+       * @allow (read, write) The owner of the user document can manage their own orders.
+       * @principle Ownership-based access for subcollections.
+       */
+      match /orders/{orderId} {
+        allow get, list, create, update, delete: if isOwner(userId);
+      }
     }
 
     /**

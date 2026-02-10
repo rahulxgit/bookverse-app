@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { BookMarked, ShoppingCart, User, LogOut, Loader2 } from 'lucide-react';
+import { BookMarked, ShoppingCart, User, LogOut, Loader2, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUser, useAuth } from '@/firebase';
 import { signOut } from 'firebase/auth';
@@ -81,6 +81,12 @@ export function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/orders">
+                    <Package className="mr-2 h-4 w-4" />
+                    <span>My Orders</span>
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>

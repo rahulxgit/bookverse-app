@@ -43,9 +43,11 @@ export type OrderItem = {
 export type Order = {
   id: string;
   userId: string;
+  userName?: string;
+  userEmail?: string;
   items: OrderItem[];
   totalPrice: number;
-  status: 'Pending' | 'Shipped' | 'Delivered';
+  status: 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled';
   paymentStatus: 'Paid' | 'Unpaid';
   createdAt: FieldValue;
 };

@@ -1,7 +1,7 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, writeBatch, doc, serverTimestamp, addDoc } from 'firebase/firestore';
+import { collection, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 import { Loader2, ShoppingCart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -36,13 +36,29 @@ export default function CartPage() {
       });
       return;
     }
+    
+    if (!user.displayName || !user.email) {
+      toast({
+        variant: 'destructive',
+        title: 'User profile incomplete',
+        description: 'Please complete your profile before checking out.',
+      });
+      // Optionally, redirect to a profile page
+      // router.push('/profile');
+      return;
+    }
 
-    const ordersCollectionRef = collection(firestore, 'users', user.uid, 'orders');
-    const newOrderRef = doc(ordersCollectionRef); // Create a reference with a new ID
+    const userOrdersCollectionRef = collection(firestore, 'users', user.uid, 'orders');
+    const newOrderRef = doc(userOrdersCollectionRef); // Doc ref for user's subcollection
+
+    const allOrdersCollectionRef = collection(firestore, 'orders');
+    const newGlobalOrderRef = doc(allOrdersCollectionRef, newOrderRef.id); // Same ID for global collection
 
     const newOrder: Omit<Order, 'createdAt'> = {
         id: newOrderRef.id,
         userId: user.uid,
+        userName: user.displayName,
+        userEmail: user.email,
         items: cartItems,
         totalPrice: totalPrice,
         status: 'Pending',
@@ -56,8 +72,13 @@ export default function CartPage() {
 
     const batch = writeBatch(firestore);
     
+    // 1. Set the order in the user's private subcollection
     batch.set(newOrderRef, newOrderWithTimestamp);
+    
+    // 2. Set the denormalized order in the global collection for admin access
+    batch.set(newGlobalOrderRef, newOrderWithTimestamp);
 
+    // 3. Delete cart items
     cartItems.forEach(item => {
         const cartItemRef = doc(firestore, 'users', user.uid, 'cart', item.id);
         batch.delete(cartItemRef);

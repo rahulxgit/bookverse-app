@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SeedDatabaseCard } from '@/components/admin/seed-database';
 import { BookTable } from '@/components/admin/book-table';
+import { OrderTable } from '@/components/admin/order-table';
 
 export default function AdminPage() {
   return (
@@ -14,8 +15,9 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="books">
-        <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+        <TabsList className="grid w-full grid-cols-3 md:w-[600px]">
           <TabsTrigger value="books">Books</TabsTrigger>
+          <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="database">Database</TabsTrigger>
         </TabsList>
         <TabsContent value="books" className="mt-6">
@@ -26,6 +28,17 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <BookTable />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="orders" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Orders</CardTitle>
+              <CardDescription>View and manage all customer orders.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <OrderTable />
             </CardContent>
           </Card>
         </TabsContent>

@@ -12,7 +12,7 @@ rules_version = '2';
  * There are two primary roles: Customers and Admins.
  * - **Admins**: Identified by the existence of a document in the `/roles_admin`
  *   collection. They have full CRUD access to the public book catalog and can
- *   view all orders and roles.
+ *   view and manage all orders.
  * - **Customers (Signed-in Users)**: Can manage their own user profile,
  *   their own orders and shopping cart. They have read-only access to the public book catalog.
  * - **Public (Unauthenticated Users)**: Can read the book catalog but cannot
@@ -24,20 +24,20 @@ rules_version = '2';
  *   limited to the document owner.
  * - `/users/{userId}/cart/{bookId}`: A subcollection for a user's shopping cart items.
  * - `/users/{userId}/orders/{orderId}`: A subcollection for a user's orders.
+ * - `/orders/{orderId}`: A denormalized collection of all orders for admin access.
  * - `/roles_admin/{userId}`: A special collection where the existence of a
  *   document signifies that the user is an administrator.
  *
  * @decisions
  * - **Admin Role Management**: Admin status is determined by checking for the
  *   existence of a document in `/roles_admin/{userId}`. This is a secure and
- *   performant pattern that avoids embedding roles in user profiles, which could
- *   be modified by the user.
- * - **Strict Data Privacy**: User data (profiles, orders, cart) is strictly
- *   private. A user can only ever access their own data. Admins do not have
- *   read/write access to individual user profiles or orders, enforcing a strong
- *   privacy boundary.
- * - **Public Listing Disabled for Private Data**: Listing documents from top-level
- *   collections containing private data (`/users`) is disabled to prevent data leakage.
+ *   performant pattern.
+ * - **Strict Data Privacy**: User data (profiles, cart) is strictly private.
+ *   Admins do not have read/write access to individual user profiles.
+ * - **Denormalization for Admin Queries**: The top-level `/orders` collection
+ *   contains copies of all orders. This allows admins to list and manage all
+ *   orders without needing to query across all user subcollections, which is
+ *   not possible with security rules.
  *
  */
 service cloud.firestore {
@@ -105,9 +105,6 @@ service cloud.firestore {
     /**
      * @description Public book catalog. Readable by anyone, writable only by admins.
      * @path /books/{bookId}
-     * @allow (get) Any user, signed in or not, can view a book's details.
-     * @deny (create) A regular signed-in user attempts to add a new book.
-     * @principle Public Read with Admin-Only Writes
      */
     match /books/{bookId} {
       allow get, list: if true;
@@ -117,9 +114,6 @@ service cloud.firestore {
     /**
      * @description User profile data. A user can only access their own document.
      * @path /users/{userId}
-     * @allow (create) A new user signs up and creates their own user document. `request.auth.uid` must match `userId`.
-     * @deny (get) User 'A' attempts to read the user document of user 'B'.
-     * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -131,8 +125,6 @@ service cloud.firestore {
       /**
        * @description A user's shopping cart items. Only the owner can manage their cart.
        * @path /users/{userId}/cart/{bookId}
-       * @allow (read, write) The owner of the user document can manage their own cart.
-       * @principle Ownership-based access for subcollections.
        */
       match /cart/{bookId} {
         allow get, list, create, update, delete: if isOwner(userId);
@@ -141,24 +133,34 @@ service cloud.firestore {
       /**
        * @description A user's orders. Only the owner can manage their own orders.
        * @path /users/{userId}/orders/{orderId}
-       * @allow (read, write) The owner of the user document can manage their own orders.
-       * @principle Ownership-based access for subcollections.
        */
       match /orders/{orderId} {
         allow get, list, create, update, delete: if isOwner(userId);
       }
     }
+    
+    /**
+     * @description Denormalized collection of all orders for admin access.
+     * @path /orders/{orderId}
+     */
+    match /orders/{orderId} {
+      // Admins can manage all orders
+      allow get, list, update: if isAdmin();
+      
+      // Users can only create their own order document here. They cannot read or list all orders.
+      // This write happens in the same transaction as creating the user-specific order.
+      allow create: if isOwner(request.resource.data.userId);
+
+      // Deny reads/deletes for non-admins to prevent them from accessing other users' orders.
+      allow delete: if isAdmin();
+    }
 
     /**
      * @description Admin role management. Only other admins can view or modify this collection.
      * @path /roles_admin/{userId}
-     * @allow (create) An existing admin adds another user to the `roles_admin` collection, granting them admin rights.
-     * @deny (get) A non-admin user attempts to check if another user is an admin.
-     * @principle Role-based access control; only admins can manage other admins.
      */
     match /roles_admin/{userId} {
-      allow get, list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
   }
 }

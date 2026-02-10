@@ -13,8 +13,8 @@ rules_version = '2';
  * - **Admins**: Identified by the existence of a document in the `/roles_admin`
  *   collection. They have full CRUD access to the public book catalog and can
  *   view all orders and roles.
- * - **Customers (Signed-in Users)**: Can manage their own user profile and
- *   their own orders. They have read-only access to the public book catalog.
+ * - **Customers (Signed-in Users)**: Can manage their own user profile,
+ *   their own orders and shopping cart. They have read-only access to the public book catalog.
  * - **Public (Unauthenticated Users)**: Can read the book catalog but cannot
  *   write any data.
  *
@@ -22,6 +22,7 @@ rules_version = '2';
  * - `/books/{bookId}`: A public collection of all books.
  * - `/users/{userId}`: A collection for user profiles. Access is strictly
  *   limited to the document owner.
+ * - `/users/{userId}/cart/{bookId}`: A subcollection for a user's shopping cart items.
  * - `/orders/{orderId}`: A collection of all user orders. Access is granted
  *   based on a denormalized `userId` field within each order document.
  * - `/roles_admin/{userId}`: A special collection where the existence of a
@@ -32,7 +33,7 @@ rules_version = '2';
  *   existence of a document in `/roles_admin/{userId}`. This is a secure and
  *   performant pattern that avoids embedding roles in user profiles, which could
  *   be modified by the user.
- * - **Strict Data Privacy**: User data (profiles and orders) is strictly
+ * - **Strict Data Privacy**: User data (profiles, orders, cart) is strictly
  *   private. A user can only ever access their own data. Admins do not have
  *   read/write access to individual user profiles or orders, enforcing a strong
  *   privacy boundary.
@@ -136,6 +137,16 @@ service cloud.firestore {
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
       allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description A user's shopping cart items. Only the owner can manage their cart.
+       * @path /users/{userId}/cart/{bookId}
+       * @allow (read, write) The owner of the user document can manage their own cart.
+       * @principle Ownership-based access for subcollections.
+       */
+      match /cart/{bookId} {
+        allow get, list, create, update, delete: if isOwner(userId);
+      }
     }
 
     /**

@@ -18,6 +18,16 @@ export type User = {
   role: 'Customer' | 'Admin';
 };
 
+export type CartItem = {
+  id: string; // This will be the bookId
+  title: string;
+  author: string;
+  price: number;
+  imageUrl: string;
+  imageHint: string;
+  quantity: number;
+};
+
 export type OrderItem = {
   bookId: string;
   quantity: number;
@@ -25,7 +35,7 @@ export type OrderItem = {
 };
 
 export type Order = {
-  id: string;
+  id:string;
   userId: string;
   items: OrderItem[];
   totalPrice: number;

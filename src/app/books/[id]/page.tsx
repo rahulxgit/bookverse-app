@@ -1,17 +1,21 @@
 'use client';
 
 import Image from 'next/image';
-import { notFound } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Star, Truck, ShieldCheck, Loader2 } from 'lucide-react';
-import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { doc, runTransaction } from 'firebase/firestore';
 import type { Book } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 export default function BookDetailPage({ params }: { params: { id: string } }) {
   const firestore = useFirestore();
+  const router = useRouter();
+  const { user } = useUser();
+  const { toast } = useToast();
 
   const bookRef = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
@@ -19,6 +23,47 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
   }, [firestore, params.id]);
 
   const { data: book, isLoading } = useDoc<Book>(bookRef);
+
+  const handleAddToCart = () => {
+    if (!user || !firestore || !book) {
+      router.push('/login');
+      return;
+    }
+
+    const cartItemRef = doc(firestore, 'users', user.uid, 'cart', book.id);
+    
+    runTransaction(firestore, async (transaction) => {
+        const cartDoc = await transaction.get(cartItemRef);
+        if (!cartDoc.exists()) {
+            const cartItemData = {
+                id: book.id,
+                title: book.title,
+                author: book.author,
+                price: book.price,
+                imageUrl: book.imageUrl,
+                imageHint: book.imageHint,
+                quantity: 1,
+            };
+            transaction.set(cartItemRef, cartItemData);
+        } else {
+            const newQuantity = cartDoc.data().quantity + 1;
+            transaction.update(cartItemRef, { quantity: newQuantity });
+        }
+    }).then(() => {
+        toast({
+            title: 'Added to cart!',
+            description: `${book.title} has been added to your cart.`,
+        });
+    }).catch((error) => {
+        console.error("Add to cart transaction failed: ", error);
+        toast({
+            variant: "destructive",
+            title: "Uh oh! Something went wrong.",
+            description: "Could not add item to cart.",
+        });
+    });
+  };
+
 
   if (isLoading) {
     return (
@@ -69,7 +114,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           <p className="text-3xl font-bold text-primary mt-4">${book.price.toFixed(2)}</p>
 
           <div className="mt-6">
-            <Button size="lg" className="w-full md:w-auto" disabled={book.stockQuantity === 0}>
+            <Button size="lg" className="w-full md:w-auto" disabled={book.stockQuantity === 0} onClick={handleAddToCart}>
               {book.stockQuantity === 0 ? 'Out of Stock' : 'Add to Cart'}
             </Button>
             {book.stockQuantity < 10 && book.stockQuantity > 0 && (

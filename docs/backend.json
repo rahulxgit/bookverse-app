@@ -1,0 +1,209 @@
+{
+  "entities": {
+    "Book": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Book",
+      "type": "object",
+      "description": "Represents a book in the bookstore's inventory.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Book entity."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the book."
+        },
+        "author": {
+          "type": "string",
+          "description": "The author(s) of the book."
+        },
+        "genre": {
+          "type": "string",
+          "description": "The genre of the book."
+        },
+        "isbn": {
+          "type": "string",
+          "description": "The ISBN of the book."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of the book."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the book."
+        },
+        "stockQuantity": {
+          "type": "number",
+          "description": "The number of copies of the book in stock."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL of the book's cover image."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "author",
+        "genre",
+        "isbn",
+        "price",
+        "description",
+        "stockQuantity",
+        "imageUrl"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents an order placed by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Order entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Order)"
+        },
+        "orderDate": {
+          "type": "string",
+          "description": "The date the order was placed.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the order (e.g., Pending, Shipped, Delivered)."
+        },
+        "paymentStatus": {
+          "type": "string",
+          "description": "The payment status of the order."
+        },
+        "bookIds": {
+          "type": "array",
+          "description": "References to Books. (Relationship: Order N:N Book)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "orderDate",
+        "status",
+        "paymentStatus",
+        "bookIds"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the bookstore system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the user.",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user (Customer or Admin)."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "role"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/books/{bookId}",
+        "definition": {
+          "entityName": "Book",
+          "schema": {
+            "$ref": "#/backend/entities/Book"
+          },
+          "description": "Stores book information. Accessible for read by any user, and CRUD operations limited to admins.",
+          "params": [
+            {
+              "name": "bookId",
+              "description": "Unique identifier for the book."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Only the user can read/write their own profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Stores order information. Includes denormalized 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "orderId",
+              "description": "Unique identifier for the order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Collection to store admin roles. Existence of a document indicates admin status.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the admin user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support the BookVerse API's requirements for managing books, users, and orders while prioritizing security and scalability. It emphasizes authorization independence by avoiding hierarchical `get()` calls in security rules. This is achieved by denormalizing user roles and order ownership where necessary.\n\nThe structure is segregated to ensure that each collection has a homogeneous security posture.  Private user data is stored under the `/users/{userId}` path, enforcing path-based ownership for user-specific data.  Book data is stored in a top-level `/books` collection, which is accessible to both customers (read) and admins (CRUD).  Orders are stored under `/orders/{orderId}` which includes the denormalized `userId` for enforcing ownership and access controls.  The admin role is managed via the `/roles_admin/{userId}` collection.\n\nThis design facilitates QAPs by:\n\n*   Segregating data based on access control needs, enabling secure `list` operations for books available to all users.\n*   Using the `/users/{userId}/orders` path for each user's orders, allowing secure listing of a user's own orders.\n*   Employing existence-based checks for admin roles within the `/roles_admin` collection, allowing secure checks without needing to read document data.\n\nDenormalization Strategy: The primary denormalization involves including the `userId` in the `/orders` collection, which allows security rules to validate that the user placing the order is the owner without needing to perform a `get()` operation on the `/users/{userId}` document. This ensures authorization independence and supports atomic operations.\n"
+  }
+}

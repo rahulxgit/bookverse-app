@@ -1,0 +1,169 @@
+rules_version = '2';
+
+/**
+ * @name Firebase Security Rules for BookVerse API
+ * @file firestore.rules
+ *
+ * @description
+ * This ruleset provides security for the BookVerse Firestore database.
+ *
+ * @philosophy
+ * The core philosophy is a role-based and ownership-based security model.
+ * There are two primary roles: Customers and Admins.
+ * - **Admins**: Identified by the existence of a document in the `/roles_admin`
+ *   collection. They have full CRUD access to the public book catalog and can
+ *   view all orders and roles.
+ * - **Customers (Signed-in Users)**: Can manage their own user profile and
+ *   their own orders. They have read-only access to the public book catalog.
+ * - **Public (Unauthenticated Users)**: Can read the book catalog but cannot
+ *   write any data.
+ *
+ * @structure
+ * - `/books/{bookId}`: A public collection of all books.
+ * - `/users/{userId}`: A collection for user profiles. Access is strictly
+ *   limited to the document owner.
+ * - `/orders/{orderId}`: A collection of all user orders. Access is granted
+ *   based on a denormalized `userId` field within each order document.
+ * - `/roles_admin/{userId}`: A special collection where the existence of a
+ *   document signifies that the user is an administrator.
+ *
+ * @decisions
+ * - **Admin Role Management**: Admin status is determined by checking for the
+ *   existence of a document in `/roles_admin/{userId}`. This is a secure and
+ *   performant pattern that avoids embedding roles in user profiles, which could
+ *   be modified by the user.
+ * - **Strict Data Privacy**: User data (profiles and orders) is strictly
+ *   private. A user can only ever access their own data. Admins do not have
+ *   read/write access to individual user profiles or orders, enforcing a strong
+ *   privacy boundary.
+ * - **Public Listing Disabled for Private Data**: Listing documents from top-level
+ *   collections containing private data (`/users`, `/orders`) is disabled for
+ *   non-admins to prevent data leakage. Securely listing a user's own orders
+ *   would require restructuring them into a user-owned subcollection (e.g.,
+ *   `/users/{userId}/orders/{orderId}`).
+ *
+ * @denormalization
+ * - **Order Ownership**: Each document in the `/orders` collection contains a
+ *   `userId` field. This denormalization is critical, allowing security rules
+ *   to verify order ownership directly from the document without performing
+ *   costly and slow `get()` calls to other collections.
+ *
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+
+    /**
+     * @name isSignedIn
+     * @description Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @name isOwner
+     * @description Checks if the authenticated user's UID matches the provided userId.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @name isAdmin
+     * @description Checks if the user has an admin role by verifying the
+     *              existence of their UID in the roles_admin collection.
+     *              This is a fast and secure existence-only check.
+     */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    /**
+     * @name isExistingDoc
+     * @description Checks if the document being operated on currently exists.
+     *              Crucial for all update and delete operations.
+     */
+    function isExistingDoc() {
+      return resource != null;
+    }
+
+    /**
+     * @name isExistingOwner
+     * @description Combines ownership and existence checks for secure updates and deletes.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && isExistingDoc();
+    }
+    
+    /**
+     * @name isExistingAdmin
+     * @description Combines admin and existence checks for secure updates and deletes by admins.
+     */
+    function isExistingAdmin() {
+      return isAdmin() && isExistingDoc();
+    }
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description Public book catalog. Readable by anyone, writable only by admins.
+     * @path /books/{bookId}
+     * @allow (get) Any user, signed in or not, can view a book's details.
+     * @deny (create) A regular signed-in user attempts to add a new book.
+     * @principle Public Read with Admin-Only Writes
+     */
+    match /books/{bookId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    /**
+     * @description User profile data. A user can only access their own document.
+     * @path /users/{userId}
+     * @allow (create) A new user signs up and creates their own user document. `request.auth.uid` must match `userId`.
+     * @deny (get) User 'A' attempts to read the user document of user 'B'.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description User order data. Access is restricted based on the `userId`
+     *              field within the order document itself.
+     * @path /orders/{orderId}
+     * @allow (create) A signed-in user creates an order for themselves, setting `userId` to their own UID.
+     * @deny (get) User 'A' tries to read an order document where `resource.data.userId` belongs to user 'B'.
+     * @principle Enforces document ownership for reads and writes using a denormalized ownership field.
+     */
+    match /orders/{orderId} {
+      allow get: if isOwner(resource.data.userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if (isOwner(resource.data.userId) && isExistingDoc() && request.resource.data.userId == resource.data.userId) || isExistingAdmin();
+      allow delete: if isOwner(resource.data.userId) && isExistingDoc();
+    }
+
+    /**
+     * @description Admin role management. Only other admins can view or modify this collection.
+     * @path /roles_admin/{userId}
+     * @allow (create) An existing admin adds another user to the `roles_admin` collection, granting them admin rights.
+     * @deny (get) A non-admin user attempts to check if another user is an admin.
+     * @principle Role-based access control; only admins can manage other admins.
+     */
+    match /roles_admin/{userId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

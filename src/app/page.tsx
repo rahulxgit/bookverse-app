@@ -23,10 +23,10 @@ export default function Home() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <div className="relative z-10 p-4 max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-6xl font-headline font-bold tracking-tight text-primary-foreground drop-shadow-lg">
+          <h1 className="text-4xl md:text-6xl font-headline font-bold tracking-tight text-white drop-shadow-lg">
             Welcome to BookVerse
           </h1>
-          <p className="mt-4 text-lg md:text-xl text-primary-foreground/90 drop-shadow-md max-w-2xl mx-auto">
+          <p className="mt-4 text-lg md:text-xl text-white/90 drop-shadow-md max-w-2xl mx-auto">
             Your gateway to a universe of stories. Manage your bookstore, discover new reads, and get personalized recommendations.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">

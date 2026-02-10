@@ -5,11 +5,12 @@ import { notFound, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Star, Truck, ShieldCheck, Loader2 } from 'lucide-react';
+import { Star, Truck, ShieldCheck, Loader2, Info } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { doc, runTransaction } from 'firebase/firestore';
 import type { Book } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 export default function BookDetailPage({ params }: { params: { id: string } }) {
   const firestore = useFirestore();
@@ -128,6 +129,19 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             <h2 className="text-xl font-headline font-semibold">Description</h2>
             <p className="mt-2 text-muted-foreground leading-relaxed">{book.description}</p>
           </div>
+
+          <Card className="mt-8 bg-muted/50">
+              <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-2">
+                <Info className="h-5 w-5 text-muted-foreground" />
+                <h3 className="text-lg font-semibold font-headline">Book Details</h3>
+              </CardHeader>
+              <CardContent className="pt-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                    <div><span className="font-medium text-muted-foreground">ISBN:</span> {book.isbn}</div>
+                    <div><span className="font-medium text-muted-foreground">Stock:</span> {book.stockQuantity > 0 ? `${book.stockQuantity} copies` : 'Out of Stock'}</div>
+                </div>
+              </CardContent>
+          </Card>
 
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div className="flex items-center gap-3">

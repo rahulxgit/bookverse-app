@@ -1,16 +1,39 @@
+'use client';
+
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { books } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Star, Truck, ShieldCheck } from 'lucide-react';
+import { Star, Truck, ShieldCheck, Loader2 } from 'lucide-react';
+import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { Book } from '@/lib/types';
 
 export default function BookDetailPage({ params }: { params: { id: string } }) {
-  const book = books.find(b => b.id === params.id);
+  const firestore = useFirestore();
+
+  const bookRef = useMemoFirebase(() => {
+    if (!firestore || !params.id) return null;
+    return doc(firestore, 'books', params.id);
+  }, [firestore, params.id]);
+
+  const { data: book, isLoading } = useDoc<Book>(bookRef);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-12rem)]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!book && !isLoading) {
+    notFound();
+  }
 
   if (!book) {
-    notFound();
+    return null; 
   }
 
   return (

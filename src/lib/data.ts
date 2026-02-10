@@ -1,4 +1,4 @@
-import type { Book, User, Order } from './types';
+import type { Book } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 const imageMap = PlaceHolderImages.reduce((acc, img) => {
@@ -78,36 +78,5 @@ export const books: Book[] = [
     stockQuantity: 0,
     imageUrl: imageMap['book-6']?.url || '/placeholder.svg',
     imageHint: imageMap['book-6']?.hint || 'haunted house',
-  },
-];
-
-export const users: User[] = [
-  { id: '1', name: 'Alice', email: 'alice@example.com', role: 'Customer' },
-  { id: '2', name: 'Bob Admin', email: 'admin@example.com', role: 'Admin' },
-];
-
-export const orders: Order[] = [
-  {
-    id: '101',
-    userId: '1',
-    items: [
-      { bookId: '1', quantity: 1, price: 10.99 },
-      { bookId: '2', quantity: 1, price: 15.99 },
-    ],
-    totalPrice: 26.98,
-    orderStatus: 'Delivered',
-    paymentStatus: 'Paid',
-    createdAt: '2023-10-15T10:00:00Z',
-  },
-  {
-    id: '102',
-    userId: '1',
-    items: [
-      { bookId: '3', quantity: 2, price: 12.50 },
-    ],
-    totalPrice: 25.00,
-    orderStatus: 'Shipped',
-    paymentStatus: 'Paid',
-    createdAt: '2023-10-28T14:30:00Z',
   },
 ];
